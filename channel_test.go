@@ -84,3 +84,34 @@ func testUnboundedBufferedChannel(t *testing.T, producerDelay time.Duration, con
 	ch.Close()
 	wg.Wait()
 }
+
+func TestChaos(t *testing.T) {
+	// attempting to test if we can get Send in a blocking after having
+	// closed the channel
+
+	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 100, 100)
+
+	// writer
+	go func() {
+		for i := 0; i < 100; i++ {
+			ch.Send(i)
+			// time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	// reader
+	go func() {
+		for i := 0; i < 10; i++ {
+			msg, ok := ch.Read()
+			if !ok {
+				fmt.Println("read done.")
+				return
+			}
+			fmt.Println("msg", msg)
+		}
+		ch.Close()
+		ch.Flush()
+	}()
+
+	time.Sleep(1 * time.Second)
+}

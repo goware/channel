@@ -1,6 +1,8 @@
 package channel
 
 import (
+	"sync"
+
 	"github.com/goware/logger"
 )
 
@@ -40,6 +42,7 @@ type channel[T any] struct {
 	readCh chan T
 	sendCh chan<- T
 	done   chan struct{}
+	mu     sync.Mutex
 }
 
 func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
@@ -120,7 +123,9 @@ func (c *channel[T]) Send(message T) bool {
 	case <-c.done:
 		return false
 	default:
+		c.mu.Lock()
 		c.sendCh <- message
+		c.mu.Unlock()
 		return true
 	}
 }
@@ -130,7 +135,9 @@ func (c *channel[T]) Close() {
 	case <-c.done:
 	default:
 		close(c.done)
+		c.mu.Lock()
 		close(c.sendCh)
+		c.mu.Unlock()
 	}
 }
 
