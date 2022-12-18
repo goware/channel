@@ -18,9 +18,9 @@ type Channel[T any] interface {
 	// the read channel is closed.
 	Read() (T, bool)
 
-	// Send message to the SendChannel. A helper method in case you don't
-	// want to use the SendChannel directly. It will return false if the
-	// send channel is closed.
+	// Send message to the SendChannel. Send is non-blocking and concurrent-safe.
+	// A helper method in case you don't want to use the SendChannel directly. It will
+	// return false if the send channel is closed instead of panicing.
 	Send(message T) bool
 
 	// Done channel to determine when the unbounded Channel has been closed.
