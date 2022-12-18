@@ -5,33 +5,51 @@ import (
 )
 
 type Channel[T any] interface {
-	Read() (T, bool)
-	Send(message T) bool
+	// ReadChannel returns the read-only message channel
 	ReadChannel() <-chan T
+
+	// SendChannel returns the send-only message channel
 	SendChannel() chan<- T
+
+	// Read message from the ReadChannel. A helper method in case you don't
+	// want to use the ReadChannel directly. It will return (T, false) if
+	// the read channel is closed.
+	Read() (T, bool)
+
+	// Send message to the SendChannel. A helper method in case you don't
+	// want to use the SendChannel directly. It will return false if the
+	// send channel is closed.
+	Send(message T) bool
+
+	// Done channel to determine when the unbounded Channel has been closed.
 	Done() <-chan struct{}
+
+	// Close method will close the unbounded Channel and the send channel. Please
+	// make sure to read all of the message from ReadChannel or call Flush() to
+	// flush the channel so that the piping goroutine will exit.
 	Close()
+
+	// Flush will read any remaining buffered messages from the ReadChannel which
+	// allows the ReadChannel to close. This is by design to allow slow consumers
+	// to read messages from the ReadChannel even after the Channel has been closed.
+	// However, we offer the Flush method to clean up after a close.
+	Flush()
 }
 
 type channel[T any] struct {
 	readCh chan T
 	sendCh chan<- T
 	done   chan struct{}
-
-	log                logger.Logger
-	bufferLimitWarning int
 }
 
-func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning int) Channel[T] {
+func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
 	readCh := make(chan T)
 	sendCh := make(chan T)
 
 	channel := &channel[T]{
-		readCh:             readCh,
-		sendCh:             sendCh,
-		done:               make(chan struct{}),
-		log:                log,
-		bufferLimitWarning: bufferLimitWarning,
+		readCh: readCh,
+		sendCh: sendCh,
+		done:   make(chan struct{}),
 	}
 
 	go func() {
@@ -40,6 +58,9 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning int) Channel[
 		for {
 			if len(buffer) == 0 {
 				if message, ok := <-sendCh; ok {
+					if !(capacity <= 0) && len(buffer) >= capacity {
+						buffer = buffer[1:capacity] // truncate
+					}
 					buffer = append(buffer, message)
 					if len(buffer) > bufferLimitWarning {
 						log.Warnf("channel buffer holds %v > %v messages", len(buffer), bufferLimitWarning)
@@ -50,14 +71,15 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning int) Channel[
 				}
 			} else {
 				select {
-				case <-channel.done:
-					continue
 
 				case readCh <- buffer[0]:
 					buffer = buffer[1:]
 
 				case message, ok := <-sendCh:
 					if ok {
+						if !(capacity <= 0) && len(buffer) >= capacity {
+							buffer = buffer[1:capacity] // truncate
+						}
 						buffer = append(buffer, message)
 						if len(buffer) > bufferLimitWarning {
 							log.Warnf("channel buffer holds %v > %v messages", len(buffer), bufferLimitWarning)
@@ -109,5 +131,14 @@ func (c *channel[T]) Close() {
 	default:
 		close(c.done)
 		close(c.sendCh)
+	}
+}
+
+func (c *channel[T]) Flush() {
+	select {
+	case <-c.done:
+		for range c.readCh {
+		}
+	default:
 	}
 }

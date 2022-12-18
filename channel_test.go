@@ -12,7 +12,7 @@ import (
 )
 
 func TestSlowProducer(t *testing.T) {
-	testUnboundedBufferedChannel(t, 100*time.Millisecond, 0, 10)
+	testUnboundedBufferedChannel(t, 100*time.Millisecond, 0, 20)
 }
 
 func TestSlowConsumer(t *testing.T) {
@@ -20,11 +20,12 @@ func TestSlowConsumer(t *testing.T) {
 }
 
 func TestClosed(t *testing.T) {
-	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 100)
+	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 100, 1000)
 
 	go func() {
 		ch.Send(1)
 		ch.Close()
+		ch.Flush()
 	}()
 
 	time.Sleep(1 * time.Second)
@@ -33,11 +34,29 @@ func TestClosed(t *testing.T) {
 	ok = ch.Send(2)
 	ok = ch.Send(2)
 	ok = ch.Send(2)
+	ch.Flush()
 	fmt.Println("ok?", ok)
 }
 
+func TestCapacity(t *testing.T) {
+	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 10, 20)
+
+	go func() {
+		for i := 0; i < 40; i++ {
+			ch.Send(i)
+		}
+		ch.Close()
+	}()
+
+	time.Sleep(1 * time.Second)
+
+	for msg := range ch.ReadChannel() {
+		fmt.Println("=> msg", msg)
+	}
+}
+
 func testUnboundedBufferedChannel(t *testing.T, producerDelay time.Duration, consumerDelay time.Duration, messages int) {
-	ch := channel.NewUnboundedChan[string](logger.NewLogger(logger.LogLevel_INFO), 100)
+	ch := channel.NewUnboundedChan[string](logger.NewLogger(logger.LogLevel_INFO), 100, 1000)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
