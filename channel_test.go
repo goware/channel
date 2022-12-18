@@ -8,7 +8,6 @@ import (
 
 	"github.com/goware/channel"
 	"github.com/goware/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSlowProducer(t *testing.T) {
@@ -66,11 +65,17 @@ func testUnboundedBufferedChannel(t *testing.T, producerDelay time.Duration, con
 		for msg, ok := <-ch.ReadChannel(); ok; msg, ok = <-ch.ReadChannel() {
 			fmt.Printf("received message %v\n", msg)
 			time.Sleep(consumerDelay)
-			assert.Equal(t, fmt.Sprintf("-> msg:%d", expected), msg)
+			if msg != fmt.Sprintf("-> msg:%d", expected) {
+				t.Logf("expected '%s'", msg)
+				t.Fail()
+			}
 			expected++
 		}
 
-		assert.Equal(t, messages, expected)
+		if messages != expected {
+			t.Logf("expected '%d'", messages)
+			t.Fail()
+		}
 		wg.Done()
 	}()
 
