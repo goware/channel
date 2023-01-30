@@ -15,7 +15,7 @@ func TestSlowProducer(t *testing.T) {
 }
 
 func TestSlowConsumer(t *testing.T) {
-	testUnboundedBufferedChannel(t, 0, 100*time.Microsecond, 100)
+	testUnboundedBufferedChannel(t, 0, 10*time.Millisecond, 100)
 }
 
 func TestClosed(t *testing.T) {
