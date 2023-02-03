@@ -42,7 +42,7 @@ type channel[T any] struct {
 	readCh chan T
 	sendCh chan<- T
 	done   chan struct{}
-	mu     sync.Mutex
+	mu     sync.RWMutex
 }
 
 func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
@@ -123,9 +123,9 @@ func (c *channel[T]) Send(message T) bool {
 	case <-c.done:
 		return false
 	default:
-		c.mu.Lock()
+		c.mu.RLock()
 		c.sendCh <- message
-		c.mu.Unlock()
+		c.mu.RUnlock()
 		return true
 	}
 }
