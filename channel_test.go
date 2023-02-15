@@ -19,7 +19,7 @@ func TestSlowConsumer(t *testing.T) {
 }
 
 func TestClosed(t *testing.T) {
-	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 100, 1000)
+	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 10, 1000)
 
 	go func() {
 		ch.Send(1)
@@ -55,7 +55,7 @@ func TestCapacity(t *testing.T) {
 }
 
 func testUnboundedBufferedChannel(t *testing.T, producerDelay time.Duration, consumerDelay time.Duration, messages int) {
-	ch := channel.NewUnboundedChan[string](logger.NewLogger(logger.LogLevel_INFO), 100, 1000)
+	ch := channel.NewUnboundedChan[string](logger.NewLogger(logger.LogLevel_INFO), 5, 1000)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -80,10 +80,10 @@ func testUnboundedBufferedChannel(t *testing.T, producerDelay time.Duration, con
 	}()
 
 	for i := 0; i < messages; i++ {
+		time.Sleep(producerDelay)
 		fmt.Printf("sending message %v\n", i)
 		// ch.SendChannel() <- fmt.Sprintf("-> msg:%d", i)
 		ch.Send(fmt.Sprintf("-> msg:%d", i))
-		time.Sleep(producerDelay)
 	}
 
 	ch.Close()

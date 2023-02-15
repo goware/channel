@@ -40,57 +40,57 @@ type Channel[T any] interface {
 }
 
 type channel[T any] struct {
-	id     uint64
-	readCh chan T
-	sendCh chan<- T
-	done   chan struct{}
-	mu     sync.RWMutex
+	id   uint64
+	in   chan<- T
+	out  chan T
+	done chan struct{}
+	mu   sync.RWMutex
 }
 
 var cid uint64 = 0
 
 func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
-	readCh := make(chan T)
-	sendCh := make(chan T)
+	in := make(chan T)  // send
+	out := make(chan T) // read
 
 	channel := &channel[T]{
-		id:     atomic.AddUint64(&cid, 1),
-		readCh: readCh,
-		sendCh: sendCh,
-		done:   make(chan struct{}),
+		id:   atomic.AddUint64(&cid, 1),
+		in:   in,
+		out:  out,
+		done: make(chan struct{}),
 	}
 
 	go func() {
-		var buffer []T
+		var queue []T
 
 		for {
-			if len(buffer) == 0 {
-				if message, ok := <-sendCh; ok {
-					if !(capacity <= 0) && len(buffer) >= capacity {
-						buffer = buffer[1:capacity] // truncate
+			if len(queue) == 0 {
+				if message, ok := <-in; ok {
+					if !(capacity <= 0) && len(queue) >= capacity {
+						queue = queue[1:capacity] // truncate
 					}
-					buffer = append(buffer, message)
-					if len(buffer) > bufferLimitWarning {
-						log.Warnf("[send %d] channel buffer holds %v > %v messages", channel.id, len(buffer), bufferLimitWarning)
+					queue = append(queue, message)
+					if len(queue) > bufferLimitWarning {
+						log.Warnf("[send %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning)
 					}
 				} else {
-					close(readCh)
+					close(out)
 					return
 				}
 			} else {
 				select {
 
-				case readCh <- buffer[0]:
-					buffer = buffer[1:]
+				case out <- queue[0]:
+					queue = queue[1:]
 
-				case message, ok := <-sendCh:
+				case message, ok := <-in:
 					if ok {
-						if !(capacity <= 0) && len(buffer) >= capacity {
-							buffer = buffer[1:capacity] // truncate
+						if !(capacity <= 0) && len(queue) >= capacity {
+							queue = queue[1:capacity] // truncate
 						}
-						buffer = append(buffer, message)
-						if len(buffer) > bufferLimitWarning {
-							log.Warnf("[read %d] channel buffer holds %v > %v messages", channel.id, len(buffer), bufferLimitWarning)
+						queue = append(queue, message)
+						if len(queue) > bufferLimitWarning {
+							log.Warnf("[read %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning)
 						}
 					}
 				}
@@ -106,11 +106,11 @@ func (c *channel[T]) Done() <-chan struct{} {
 }
 
 func (c *channel[T]) ReadChannel() <-chan T {
-	return c.readCh
+	return c.out
 }
 
 func (c *channel[T]) SendChannel() chan<- T {
-	return c.sendCh
+	return c.in
 }
 
 func (c *channel[T]) Read() (T, bool) {
@@ -118,7 +118,7 @@ func (c *channel[T]) Read() (T, bool) {
 	case <-c.done:
 		var v T
 		return v, false
-	case v, ok := <-c.readCh:
+	case v, ok := <-c.out:
 		return v, ok
 	}
 }
@@ -129,7 +129,7 @@ func (c *channel[T]) Send(message T) bool {
 		return false
 	default:
 		c.mu.RLock()
-		c.sendCh <- message
+		c.in <- message
 		c.mu.RUnlock()
 		return true
 	}
@@ -141,7 +141,7 @@ func (c *channel[T]) Close() {
 	default:
 		close(c.done)
 		c.mu.Lock()
-		close(c.sendCh)
+		close(c.in)
 		c.mu.Unlock()
 	}
 }
@@ -149,7 +149,7 @@ func (c *channel[T]) Close() {
 func (c *channel[T]) Flush() {
 	select {
 	case <-c.done:
-		for range c.readCh {
+		for range c.out {
 		}
 	default:
 	}
