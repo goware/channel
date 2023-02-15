@@ -2,6 +2,7 @@ package channel
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/goware/logger"
 )
@@ -39,17 +40,21 @@ type Channel[T any] interface {
 }
 
 type channel[T any] struct {
+	id     uint64
 	readCh chan T
 	sendCh chan<- T
 	done   chan struct{}
 	mu     sync.RWMutex
 }
 
+var cid uint64 = 0
+
 func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
 	readCh := make(chan T)
 	sendCh := make(chan T)
 
 	channel := &channel[T]{
+		id:     atomic.AddUint64(&cid, 1),
 		readCh: readCh,
 		sendCh: sendCh,
 		done:   make(chan struct{}),
@@ -66,7 +71,7 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 					}
 					buffer = append(buffer, message)
 					if len(buffer) > bufferLimitWarning {
-						log.Warnf("channel buffer holds %v > %v messages", len(buffer), bufferLimitWarning)
+						log.Warnf("[send %d] channel buffer holds %v > %v messages", channel.id, len(buffer), bufferLimitWarning)
 					}
 				} else {
 					close(readCh)
@@ -85,7 +90,7 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 						}
 						buffer = append(buffer, message)
 						if len(buffer) > bufferLimitWarning {
-							log.Warnf("channel buffer holds %v > %v messages", len(buffer), bufferLimitWarning)
+							log.Warnf("[read %d] channel buffer holds %v > %v messages", channel.id, len(buffer), bufferLimitWarning)
 						}
 					}
 				}
