@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -40,24 +41,32 @@ type Channel[T any] interface {
 }
 
 type channel[T any] struct {
-	id   uint64
-	in   chan<- T
-	out  chan T
-	done chan struct{}
-	mu   sync.RWMutex
+	id    uint64
+	in    chan<- T
+	out   chan T
+	done  chan struct{}
+	mu    sync.RWMutex
+	flag  bool
+	label string
 }
 
 var cid uint64 = 0
 
-func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
+func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int, optLabel ...string) Channel[T] {
 	in := make(chan T)  // send
 	out := make(chan T) // read
 
+	label := ""
+	if len(optLabel) > 0 {
+		label = optLabel[0]
+	}
+
 	channel := &channel[T]{
-		id:   atomic.AddUint64(&cid, 1),
-		in:   in,
-		out:  out,
-		done: make(chan struct{}),
+		id:    atomic.AddUint64(&cid, 1),
+		label: label,
+		in:    in,
+		out:   out,
+		done:  make(chan struct{}),
 	}
 
 	go func() {
@@ -71,7 +80,7 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 					}
 					queue = append(queue, message)
 					if len(queue) > bufferLimitWarning {
-						log.Warnf("[send %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning)
+						log.Warnf("[send %d/%s] channel queue holds %v > %v messages", channel.id, channel.label, len(queue), bufferLimitWarning)
 					}
 				} else {
 					close(out)
@@ -81,6 +90,10 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 				select {
 
 				case out <- queue[0]:
+					if channel.flag {
+						// panic("so we are draining, after a flag indeed.........")
+						fmt.Println("so we are draining, after a flag indeed.........")
+					}
 					queue = queue[1:]
 
 				case message, ok := <-in:
@@ -90,7 +103,9 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 						}
 						queue = append(queue, message)
 						if len(queue) > bufferLimitWarning {
-							log.Warnf("[read %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning)
+							// spew.Dump(message)
+							channel.flag = true
+							log.Warnf("[read %d/%s] channel queue holds %v > %v messages", channel.id, channel.label, len(queue), bufferLimitWarning)
 						}
 					}
 				}

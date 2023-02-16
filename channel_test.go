@@ -10,6 +10,49 @@ import (
 	"github.com/goware/logger"
 )
 
+func TestSlowThenFast(t *testing.T) {
+	ch := channel.NewUnboundedChan[string](logger.NewLogger(logger.LogLevel_INFO), 5, 1000)
+
+	messages := 100
+	consumerDelay := 5 * time.Second
+	producerDelay := 200 * time.Millisecond
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Consumer
+	go func() {
+		expected := 0
+		for msg, ok := <-ch.ReadChannel(); ok; msg, ok = <-ch.ReadChannel() {
+			fmt.Printf("received message %v\n", msg)
+			if expected < 10 {
+				time.Sleep(consumerDelay)
+			}
+			if msg != fmt.Sprintf("-> msg:%d", expected) {
+				t.Logf("expected '%s'", msg)
+				t.Fail()
+			}
+			expected++
+		}
+
+		if messages != expected {
+			t.Logf("expected '%d'", messages)
+			t.Fail()
+		}
+		wg.Done()
+	}()
+
+	for i := 0; i < messages*10_000; i++ {
+		time.Sleep(producerDelay)
+		fmt.Printf("sending message %v\n", i)
+		// ch.SendChannel() <- fmt.Sprintf("-> msg:%d", i)
+		ch.Send(fmt.Sprintf("-> msg:%d", i))
+	}
+
+	ch.Close()
+	wg.Wait()
+}
+
 func TestSlowProducer(t *testing.T) {
 	testUnboundedBufferedChannel(t, 100*time.Millisecond, 0, 20)
 }
