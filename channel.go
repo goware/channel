@@ -1,7 +1,6 @@
 package channel
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -46,7 +45,6 @@ type channel[T any] struct {
 	out   chan T
 	done  chan struct{}
 	mu    sync.RWMutex
-	flag  bool
 	label string
 }
 
@@ -90,10 +88,6 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 				select {
 
 				case out <- queue[0]:
-					if channel.flag {
-						// panic("so we are draining, after a flag indeed.........")
-						fmt.Println("so we are draining, after a flag indeed.........")
-					}
 					queue = queue[1:]
 
 				case message, ok := <-in:
@@ -103,8 +97,6 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 						}
 						queue = append(queue, message)
 						if len(queue) > bufferLimitWarning {
-							// spew.Dump(message)
-							channel.flag = true
 							log.Warnf("[read %d/%s] channel queue holds %v > %v messages", channel.id, channel.label, len(queue), bufferLimitWarning)
 						}
 					}
