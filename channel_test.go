@@ -2,12 +2,12 @@ package channel_test
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/goware/channel"
-	"github.com/goware/logger"
 )
 
 func TestSlowProducer(t *testing.T) {
@@ -19,7 +19,7 @@ func TestSlowConsumer(t *testing.T) {
 }
 
 func TestClosed(t *testing.T) {
-	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 10, 1000)
+	ch := channel.NewUnboundedChan[int](10, 1000, channel.Options{Logger: slog.Default()})
 
 	go func() {
 		ch.Send(1)
@@ -38,7 +38,7 @@ func TestClosed(t *testing.T) {
 }
 
 func TestCapacity(t *testing.T) {
-	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 10, 20)
+	ch := channel.NewUnboundedChan[int](10, 20, channel.Options{Logger: slog.Default()})
 
 	go func() {
 		for i := 0; i < 40; i++ {
@@ -55,7 +55,7 @@ func TestCapacity(t *testing.T) {
 }
 
 func testUnboundedBufferedChannel(t *testing.T, producerDelay time.Duration, consumerDelay time.Duration, messages int) {
-	ch := channel.NewUnboundedChan[string](logger.NewLogger(logger.LogLevel_INFO), 5, 1000)
+	ch := channel.NewUnboundedChan[string](5, 1000, channel.Options{Logger: slog.Default()})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -94,7 +94,7 @@ func TestChaos(t *testing.T) {
 	// attempting to test if we can get Send in a blocking after having
 	// closed the channel
 
-	ch := channel.NewUnboundedChan[int](logger.NewLogger(logger.LogLevel_INFO), 100, 100)
+	ch := channel.NewUnboundedChan[int](100, 100, channel.Options{Logger: slog.Default()})
 
 	// writer
 	go func() {

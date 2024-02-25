@@ -1,10 +1,11 @@
 package channel
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
-
-	"github.com/goware/logger"
 )
 
 type Channel[T any] interface {
@@ -39,6 +40,11 @@ type Channel[T any] interface {
 	Flush()
 }
 
+type Options struct {
+	Logger  *slog.Logger
+	Alerter Alerter
+}
+
 type channel[T any] struct {
 	id   uint64
 	in   chan<- T
@@ -49,7 +55,12 @@ type channel[T any] struct {
 
 var cid uint64 = 0
 
-func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int) Channel[T] {
+func NewUnboundedChan[T any](bufferLimitWarning, capacity int, options ...Options) Channel[T] {
+	opts := Options{}
+	if len(options) > 0 {
+		opts = options[0]
+	}
+
 	in := make(chan T)  // send
 	out := make(chan T) // read
 
@@ -71,7 +82,12 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 					}
 					queue = append(queue, message)
 					if len(queue) > bufferLimitWarning {
-						log.Warnf("[send %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning)
+						if opts.Logger != nil {
+							opts.Logger.Warn(fmt.Sprintf("[send %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning))
+						}
+						if opts.Alerter != nil {
+							opts.Alerter.Alert(context.Background(), fmt.Sprintf("[send %d] channel queue limit of %v messages", channel.id, bufferLimitWarning))
+						}
 					}
 				} else {
 					close(out)
@@ -90,7 +106,12 @@ func NewUnboundedChan[T any](log logger.Logger, bufferLimitWarning, capacity int
 						}
 						queue = append(queue, message)
 						if len(queue) > bufferLimitWarning {
-							log.Warnf("[read %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning)
+							if opts.Logger != nil {
+								opts.Logger.Warn(fmt.Sprintf("[read %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning))
+							}
+							if opts.Alerter != nil {
+								opts.Alerter.Alert(context.Background(), fmt.Sprintf("[read %d] channel queue limit of %v messages", channel.id, bufferLimitWarning))
+							}
 						}
 					}
 				}
