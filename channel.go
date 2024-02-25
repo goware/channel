@@ -3,9 +3,10 @@ package channel
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 	"sync/atomic"
+
+	"github.com/goware/logger"
 )
 
 type Channel[T any] interface {
@@ -41,7 +42,7 @@ type Channel[T any] interface {
 }
 
 type Options struct {
-	Logger  *slog.Logger
+	Logger  logger.Logger
 	Alerter Alerter
 }
 
