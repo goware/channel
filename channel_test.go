@@ -38,7 +38,7 @@ func TestClosed(t *testing.T) {
 }
 
 func TestCapacity(t *testing.T) {
-	ch := channel.NewUnboundedChan[int](10, 20, channel.Options{Logger: logger.NewLogger(logger.LogLevel_INFO)})
+	ch := channel.NewUnboundedChan[int](10, 20, channel.Options{Logger: logger.NewLogger(logger.LogLevel_INFO), Label: "TestClosed"})
 
 	go func() {
 		for i := 0; i < 40; i++ {

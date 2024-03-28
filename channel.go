@@ -44,14 +44,16 @@ type Channel[T any] interface {
 type Options struct {
 	Logger  logger.Logger
 	Alerter Alerter
+	Label   string
 }
 
 type channel[T any] struct {
-	id   uint64
-	in   chan<- T
-	out  chan T
-	done chan struct{}
-	mu   sync.RWMutex
+	id    uint64
+	label string // optional
+	in    chan<- T
+	out   chan T
+	done  chan struct{}
+	mu    sync.RWMutex
 }
 
 var cid uint64 = 0
@@ -66,10 +68,18 @@ func NewUnboundedChan[T any](bufferLimitWarning, capacity int, options ...Option
 	out := make(chan T) // read
 
 	channel := &channel[T]{
-		id:   atomic.AddUint64(&cid, 1),
-		in:   in,
-		out:  out,
-		done: make(chan struct{}),
+		id:    atomic.AddUint64(&cid, 1),
+		label: opts.Label,
+		in:    in,
+		out:   out,
+		done:  make(chan struct{}),
+	}
+
+	var label string
+	if channel.label != "" {
+		label = fmt.Sprintf("%d:%s", channel.id, channel.label)
+	} else {
+		label = fmt.Sprintf("%d", channel.id)
 	}
 
 	go func() {
@@ -84,10 +94,10 @@ func NewUnboundedChan[T any](bufferLimitWarning, capacity int, options ...Option
 					queue = append(queue, message)
 					if len(queue) > bufferLimitWarning {
 						if opts.Logger != nil {
-							opts.Logger.Warn(fmt.Sprintf("[send %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning))
+							opts.Logger.Warn(fmt.Sprintf("[send %s] channel queue holds %v > %v messages", label, len(queue), bufferLimitWarning))
 						}
 						if opts.Alerter != nil {
-							opts.Alerter.Alert(context.Background(), fmt.Sprintf("[send %d] channel queue limit of %v messages", channel.id, bufferLimitWarning))
+							opts.Alerter.Alert(context.Background(), fmt.Sprintf("[send %s] channel queue limit of %v messages", label, bufferLimitWarning))
 						}
 					}
 				} else {
@@ -108,10 +118,10 @@ func NewUnboundedChan[T any](bufferLimitWarning, capacity int, options ...Option
 						queue = append(queue, message)
 						if len(queue) > bufferLimitWarning {
 							if opts.Logger != nil {
-								opts.Logger.Warn(fmt.Sprintf("[read %d] channel queue holds %v > %v messages", channel.id, len(queue), bufferLimitWarning))
+								opts.Logger.Warn(fmt.Sprintf("[read %s] channel queue holds %v > %v messages", label, len(queue), bufferLimitWarning))
 							}
 							if opts.Alerter != nil {
-								opts.Alerter.Alert(context.Background(), fmt.Sprintf("[read %d] channel queue limit of %v messages", channel.id, bufferLimitWarning))
+								opts.Alerter.Alert(context.Background(), fmt.Sprintf("[read %s] channel queue limit of %v messages", label, bufferLimitWarning))
 							}
 						}
 					}
