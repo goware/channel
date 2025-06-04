@@ -3,10 +3,9 @@ package channel
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
-
-	"github.com/goware/logger"
 )
 
 type Channel[T any] interface {
@@ -42,7 +41,7 @@ type Channel[T any] interface {
 }
 
 type Options struct {
-	Logger  logger.Logger
+	Logger  *slog.Logger
 	Alerter Alerter
 	Label   string
 }
@@ -118,10 +117,10 @@ func NewUnboundedChan[T any](bufferLimitWarning, capacity int, options ...Option
 						queue = append(queue, message)
 						if len(queue) > bufferLimitWarning {
 							if opts.Logger != nil {
-								opts.Logger.Warn(fmt.Sprintf("[read %s] channel queue holds %v > %v messages", label, len(queue), bufferLimitWarning))
+								opts.Logger.Warn(fmt.Sprintf("[send %s] channel queue holds %v > %v messages", label, len(queue), bufferLimitWarning))
 							}
 							if opts.Alerter != nil {
-								opts.Alerter.Alert(context.Background(), fmt.Sprintf("[read %s] channel queue limit of %v messages", label, bufferLimitWarning))
+								opts.Alerter.Alert(context.Background(), fmt.Sprintf("[send %s] channel queue limit of %v messages", label, bufferLimitWarning))
 							}
 						}
 					}
